@@ -1079,7 +1079,6 @@ def abreExcel_copiaDados_formato_completo(file_path):
     Função integrada que aplica limpeza completa e prepara para Google Sheets
     """
     try:
-        import win32com.client
         
         excel_app = win32com.client.Dispatch("Excel.Application")
         excel_app.Visible = True
