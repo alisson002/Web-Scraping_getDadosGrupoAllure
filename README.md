@@ -255,22 +255,6 @@ from teste import *
 # Útil para testar a integração sem navegação web
 ```
 
-### Uso Individual das Funções
-
-```python
-import login_cliniCorp as lcc
-import addDados_EXtoGS as exgs
-
-# Inicializar navegador
-lcc.inicializar_navegador()
-
-# Fazer login
-lcc.loginCliniCorp_RU("https://sistema.clinicorp.com/login/", "usuario", "senha")
-
-# Processar dados
-exgs.copiandoDados_excelToGs(gs_link, caminho_credenciais)
-```
-
 ### Transformações Aplicadas
 
 1. **Limpeza de Texto**
