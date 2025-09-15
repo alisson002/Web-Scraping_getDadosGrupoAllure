@@ -437,78 +437,6 @@ def aplicar_formatacao_moeda_google_sheets_old(worksheet, data, linha_inicio=1):
     except Exception as e:
         print(f"❌ Erro na formatação de moeda: {e}")
 
-def aplicar_formatacao_completa_google_sheets(worksheet, data, linha_inicio=1):
-    """
-    Aplica formatação completa (moeda, porcentagem, número) às colunas específicas no Google Sheets
-    """
-    try:
-        print("🎨 Aplicando formatação completa no Google Sheets...")
-        
-        # Definir todas as colunas por tipo
-        colunas_moeda = ['C', 'D', 'F', 'G', 'L', 'M', 'O', 'P', 'R', 'S', 'U', 'V', 'X', 'Y', 'AP', 'AQ', 'AS', 'AT']
-        colunas_porcentagem = ['E', 'H', 'I', 'J', 'K', 'N', 'Q', 'T', 'W', 'Z', 'AC', 'AF', 'AI', 'AL', 'AO', 'AR', 'AU']
-        colunas_numero = ['AA', 'AB', 'AD', 'AE', 'AG', 'AH', 'AJ', 'AK', 'AM', 'AN']
-        
-        num_linhas = len(data)
-        linha_fim = linha_inicio + num_linhas - 1
-        
-        # Formatos
-        formato_moeda_br = {
-            "numberFormat": {
-                "type": "CURRENCY",
-                "pattern": "\"R$\"#,##0.00"
-            }
-        }
-        
-        formato_porcentagem = {
-            "numberFormat": {
-                "type": "PERCENT",
-                "pattern": "0.00%"
-            }
-        }
-        
-        formato_numero = {
-            "numberFormat": {
-                "type": "NUMBER",
-                "pattern": "#,##0.00"
-            }
-        }
-        
-        # Aplica formatação de moeda
-        print("💰 Aplicando formatação de moeda...")
-        for coluna in colunas_moeda:
-            try:
-                range_formatacao = f"{coluna}{linha_inicio}:{coluna}{linha_fim}"
-                worksheet.format(range_formatacao, formato_moeda_br)
-                print(f"💱 Formatação de moeda aplicada na coluna {coluna}")
-            except Exception as e:
-                print(f"⚠️ Erro ao formatar moeda na coluna {coluna}: {e}")
-        
-        # Aplica formatação de porcentagem
-        print("📊 Aplicando formatação de porcentagem...")
-        for coluna in colunas_porcentagem:
-            try:
-                range_formatacao = f"{coluna}{linha_inicio}:{coluna}{linha_fim}"
-                worksheet.format(range_formatacao, formato_porcentagem)
-                print(f"📈 Formatação de porcentagem aplicada na coluna {coluna}")
-            except Exception as e:
-                print(f"⚠️ Erro ao formatar porcentagem na coluna {coluna}: {e}")
-        
-        # Aplica formatação de número
-        print("🔢 Aplicando formatação de número...")
-        for coluna in colunas_numero:
-            try:
-                range_formatacao = f"{coluna}{linha_inicio}:{coluna}{linha_fim}"
-                worksheet.format(range_formatacao, formato_numero)
-                print(f"🔢 Formatação de número aplicada na coluna {coluna}")
-            except Exception as e:
-                print(f"⚠️ Erro ao formatar número na coluna {coluna}: {e}")
-        
-        print("✅ Formatação completa concluída.")
-        
-    except Exception as e:
-        print(f"❌ Erro na formatação: {e}")
-
 def verificar_configuracao_google(credentials_file, google_sheets_url):
     """
     Função para verificar se a configuração do Google Sheets está correta
@@ -561,8 +489,178 @@ def verificar_configuracao_google(credentials_file, google_sheets_url):
         print(f"❌ Erro na verificação: {str(e)}")
         return False
 
+def paste_to_google_sheets_com_formatacao_old(google_sheets_url, data, credentials_file):
+    """
+    Versão melhorada que cola dados E aplica formatação de moeda
+    """
+    try:
+        from google.oauth2.service_account import Credentials
+        
+        print("Configurando acesso ao Google Sheets...")
+        
+        # Configura as credenciais
+        scopes = [
+            'https://www.googleapis.com/auth/spreadsheets',
+            'https://www.googleapis.com/auth/drive'
+        ]
+        
+        credentials = Credentials.from_service_account_file(credentials_file, scopes=scopes)
+        client = gspread.authorize(credentials)
+        
+        # Extrai o ID da planilha
+        if '/d/' in google_sheets_url:
+            spreadsheet_id = google_sheets_url.split('/d/')[1].split('/')[0]
+            print(f"ID da planilha extraído: {spreadsheet_id}")
+        else:
+            raise ValueError("URL do Google Sheets inválida")
+        
+        # Abre a planilha
+        print("Abrindo planilha do Google Sheets...")
+        spreadsheet = client.open_by_key(spreadsheet_id)
+        worksheet = spreadsheet.get_worksheet(0)
+        
+        print(f"Planilha acessada: {spreadsheet.title}")
+        print(f"Aba selecionada: {worksheet.title}")
+        
+        # Encontra a primeira linha vazia
+        print("Procurando primeira linha vazia...")
+        all_values = worksheet.get_all_values()
+        
+        next_row = 1
+        if all_values:
+            for i, row in enumerate(all_values):
+                if not any(cell.strip() for cell in row if cell):
+                    next_row = i + 1
+                    break
+            else:
+                next_row = len(all_values) + 1
+        
+        print(f"Inserindo dados a partir da linha {next_row}")
+        
+        # Prepara os dados
+        if not data or not data[0]:
+            raise ValueError("Nenhum dado para inserir")
+            
+        num_rows = len(data)
+        num_cols = len(data[0])
+        
+        def num_to_col_letters(num):
+            letters = ''
+            while num:
+                mod = (num - 1) % 26
+                letters = chr(mod + 65) + letters
+                num = (num - 1) // 26
+            return letters
+        
+        start_col = 'A'
+        end_col = num_to_col_letters(num_cols)
+        end_row = next_row + num_rows - 1
+        
+        range_name = f'{start_col}{next_row}:{end_col}{end_row}'
+        print(f"Range de inserção: {range_name}")
+        
+        # Limpa dados None
+        cleaned_data = []
+        for row in data:
+            cleaned_row = []
+            for cell in row:
+                if cell is None:
+                    cleaned_row.append('')
+                else:
+                    cleaned_row.append(cell)  # Mantém o tipo original (float para moeda)
+            cleaned_data.append(cleaned_row)
+        
+        # Insere os dados na planilha
+        print("Inserindo dados na planilha...")
+        worksheet.update(range_name, cleaned_data, value_input_option='USER_ENTERED')
+        
+        print("💰 Aplicando formatação de moeda...")
+        # Aplica formatação de moeda após inserir os dados
+        aplicar_formatacao_completa_google_sheets(worksheet, cleaned_data, next_row)
+        
+        print(f"✅ Dados inseridos e formatados com sucesso!")
+        print(f"📊 Range utilizado: {range_name}")
+        print(f"📝 Número de linhas inseridas: {num_rows}")
+        print(f"📋 Número de colunas: {num_cols}")
+        print(f"🔗 Planilha acessível em: {google_sheets_url}")
+        
+    except Exception as e:
+        print(f"❌ Erro ao acessar ou modificar a planilha: {str(e)}")
+        raise
 
 
+
+def aplicar_formatacao_completa_google_sheets(worksheet, data, linha_inicio=1):
+    """
+    Aplica formatação completa (moeda, porcentagem, número) às colunas específicas no Google Sheets
+    """
+    try:
+        print("🎨 Aplicando formatação completa no Google Sheets...")
+        
+        # Definir todas as colunas por tipo
+        colunas_moeda = ['C', 'D', 'F', 'G', 'L', 'M', 'O', 'P', 'R', 'S', 'U', 'V', 'X', 'Y', 'AP', 'AQ', 'AS', 'AT']
+        colunas_porcentagem = ['E', 'H', 'I', 'J', 'K', 'N', 'Q', 'T', 'W', 'Z', 'AC', 'AF', 'AI', 'AL', 'AO', 'AR', 'AU']
+        colunas_numero = ['AA', 'AB', 'AD', 'AE', 'AG', 'AH', 'AJ', 'AK', 'AM', 'AN']
+        
+        num_linhas = len(data)
+        linha_fim = linha_inicio + num_linhas - 1
+        
+        # Formatos
+        formato_moeda_br = {
+            "numberFormat": {
+                "type": "CURRENCY",
+                "pattern": "\"R$\"#,##0.00"
+            }
+        }
+        
+        formato_porcentagem = {
+            "numberFormat": {
+                "type": "PERCENT",
+                "pattern": "0.00%"
+            }
+        }
+        
+        formato_numero = {
+            "numberFormat": {
+                "type": "NUMBER",
+                "pattern": "0"
+            }
+        }
+        
+        # Aplica formatação de moeda
+        print("💰 Aplicando formatação de moeda...")
+        for coluna in colunas_moeda:
+            try:
+                range_formatacao = f"{coluna}{linha_inicio}:{coluna}{linha_fim}"
+                worksheet.format(range_formatacao, formato_moeda_br)
+                print(f"💱 Formatação de moeda aplicada na coluna {coluna}")
+            except Exception as e:
+                print(f"⚠️ Erro ao formatar moeda na coluna {coluna}: {e}")
+        
+        # Aplica formatação de porcentagem
+        print("📊 Aplicando formatação de porcentagem...")
+        for coluna in colunas_porcentagem:
+            try:
+                range_formatacao = f"{coluna}{linha_inicio}:{coluna}{linha_fim}"
+                worksheet.format(range_formatacao, formato_porcentagem)
+                print(f"📈 Formatação de porcentagem aplicada na coluna {coluna}")
+            except Exception as e:
+                print(f"⚠️ Erro ao formatar porcentagem na coluna {coluna}: {e}")
+        
+        # Aplica formatação de número
+        print("🔢 Aplicando formatação de número...")
+        for coluna in colunas_numero:
+            try:
+                range_formatacao = f"{coluna}{linha_inicio}:{coluna}{linha_fim}"
+                worksheet.format(range_formatacao, formato_numero)
+                print(f"🔢 Formatação de número aplicada na coluna {coluna}")
+            except Exception as e:
+                print(f"⚠️ Erro ao formatar número na coluna {coluna}: {e}")
+        
+        print("✅ Formatação completa concluída.")
+        
+    except Exception as e:
+        print(f"❌ Erro na formatação: {e}")
 
 def indice_para_coluna_letra(indice):
     """Converte índice para letra da coluna (0=A, 1=B, 2=C, etc.)"""
@@ -598,14 +696,86 @@ def limpar_dados_completo_brasileiro_expandido(data):
         # Mapeamento de códigos para cidades
         mapeamento_unidades = {
             '1odontologiasa': 'Santo Antônio',
+            '2odontologiasa': 'Santo Antônio',
+            '3odontologiasa': 'Santo Antônio',
+            '4odontologiasa': 'Santo Antônio',
+            '5odontologiasa': 'Santo Antônio',
+            '6odontologiasa': 'Santo Antônio',
+            '7odontologiasa': 'Santo Antônio',
+            '8odontologiasa': 'Santo Antônio',
+            '9odontologiasa': 'Santo Antônio',
+            '1odontologiana': 'Natal (odonto)',
             '2odontologiana': 'Natal (odonto)',
+            '3odontologiana': 'Natal (odonto)',
+            '4odontologiana': 'Natal (odonto)',
+            '5odontologiana': 'Natal (odonto)',
+            '6odontologiana': 'Natal (odonto)',
+            '7odontologiana': 'Natal (odonto)',
+            '8odontologiana': 'Natal (odonto)',
+            '9odontologiana': 'Natal (odonto)',
+            '1odontologiasjm': 'São José do Mipibu',
+            '2odontologiasjm': 'São José do Mipibu',
             '3odontologiasjm': 'São José do Mipibu',
+            '4odontologiasjm': 'São José do Mipibu',
+            '5odontologiasjm': 'São José do Mipibu',
+            '6odontologiasjm': 'São José do Mipibu',
+            '7odontologiasjm': 'São José do Mipibu',
+            '8odontologiasjm': 'São José do Mipibu',
+            '9odontologiasjm': 'São José do Mipibu',
+            '1odontologiacg': 'Canguaretama',
+            '2odontologiacg': 'Canguaretama',
+            '3odontologiacg': 'Canguaretama',
             '4odontologiacg': 'Canguaretama',
+            '5odontologiacg': 'Canguaretama',
+            '6odontologiacg': 'Canguaretama',
+            '7odontologiacg': 'Canguaretama',
+            '8odontologiacg': 'Canguaretama',
+            '9odontologiacg': 'Canguaretama',
+            '1odontologiagoi': 'Goianinha',
+            '2odontologiagoi': 'Goianinha',
+            '3odontologiagoi': 'Goianinha',
+            '4odontologiagoi': 'Goianinha',
             '5odontologiagoi': 'Goianinha',
+            '6odontologiagoi': 'Goianinha',
+            '7odontologiagoi': 'Goianinha',
+            '8odontologiagoi': 'Goianinha',
+            '9odontologiagoi': 'Goianinha',
+            '1mbestetica': 'Natal (MBEstética)',
+            '2mbestetica': 'Natal (MBEstética)',
+            '3mbestetica': 'Natal (MBEstética)',
+            '4mbestetica': 'Natal (MBEstética)',
+            '5mbestetica': 'Natal (MBEstética)',
             '6mbestetica': 'Natal (MBEstética)',
+            '7mbestetica': 'Natal (MBEstética)',
+            '8mbestetica': 'Natal (MBEstética)',
+            '9mbestetica': 'Natal (MBEstética)',
+            '1odontoma': 'Monte Alegre',
+            '2odontoma': 'Monte Alegre',
+            '3odontoma': 'Monte Alegre',
+            '4odontoma': 'Monte Alegre',
+            '5odontoma': 'Monte Alegre',
+            '6odontoma': 'Monte Alegre',
             '7odontoma': 'Monte Alegre',
+            '8odontoma': 'Monte Alegre',
+            '9odontoma': 'Monte Alegre',
+            '1odontologiabj': 'Brejinho',
+            '2odontologiabj': 'Brejinho',
+            '3odontologiabj': 'Brejinho',
+            '4odontologiabj': 'Brejinho',
+            '5odontologiabj': 'Brejinho',
+            '6odontologiabj': 'Brejinho',
+            '7odontologiabj': 'Brejinho',
             '8odontologiabj': 'Brejinho',
-            '9odontorecife': 'Recife'
+            '9odontologiabj': 'Brejinho',
+            '1odontorecife': 'Recife',
+            '2odontorecife': 'Recife',
+            '3odontorecife': 'Recife',
+            '4odontorecife': 'Recife',
+            '5odontorecife': 'Recife',
+            '6odontorecife': 'Recife',
+            '7odontorecife': 'Recife',
+            '8odontorecife': 'Recife',
+            '9odontorecife': 'Recife',
         }
         
         # Mapeamento de cidades para CEPs
@@ -619,6 +789,21 @@ def limpar_dados_completo_brasileiro_expandido(data):
             'Monte Alegre': '59182-000',
             'Brejinho': '59219-000',
             'Recife': '50010-000'
+        }
+        
+        mapeamento_periodos = {
+            '01/01/2025-31/01/2025': 'Janeiro/2025',
+            '01/02/2025-28/02/2025': 'Fevereiro/2025',
+            '01/03/2025-31/03/2025': 'Março/2025',
+            '01/04/2025-30/04/2025': 'Abril/2025',
+            '01/05/2025-31/05/2025': 'Maio/2025',
+            '01/06/2025-30/06/2025': 'Junho/2025',
+            '01/07/2025-31/07/2025': 'Julho/2025',
+            '01/08/2025-31/08/2025': 'Agosto/2025',
+            '01/09/2025-30/09/2025': 'Setembro/2025',
+            '01/10/2025-31/10/2025': 'Outubro/2025',
+            '01/11/2025-30/11/2025': 'Novembro/2025',
+            '01/12/2025-31/12/2025': 'Dezembro/2025',
         }
         
         # Colunas de moeda: C, D, F, G, L, M, O, P, R, S, U, V, X, Y, AP, AQ, AS, AT
@@ -635,6 +820,7 @@ def limpar_dados_completo_brasileiro_expandido(data):
         
         # Coluna AV (índice para CEP)
         indice_av = coluna_letra_para_indice('AV')
+        indice_b = coluna_letra_para_indice('B')
         
         print(f"🔍 Colunas de moeda identificadas: {colunas_moeda}")
         print(f"📊 Colunas de porcentagem identificadas: {colunas_porcentagem}")
@@ -644,7 +830,9 @@ def limpar_dados_completo_brasileiro_expandido(data):
         
         for i, row in enumerate(data):
             linha_alterada = False
+            linha_alterada2 = False
             cidade_linha = None  # Para armazenar a cidade da linha atual
+            periodo_linha = None
             
             # Primeiro, verifica se há substituição de unidade na coluna A
             if len(row) > 0 and row[0] is not None:
@@ -654,6 +842,14 @@ def limpar_dados_completo_brasileiro_expandido(data):
                     row[0] = cidade_linha
                     linha_alterada = True
                     print(f"Linha {i+3}, Coluna A: '{valor_coluna_a}' -> '{cidade_linha}'")
+            
+            if len(row) > 0 and row[1] is not None:
+                valor_coluna_b = str(row[1]).strip()
+                if valor_coluna_b in mapeamento_periodos:
+                    periodo_linha = mapeamento_periodos[valor_coluna_b]
+                    row[1] = periodo_linha
+                    linha_alterada = True
+                    print(f"Linha {i+3}, Coluna b: '{valor_coluna_b}' -> '{periodo_linha}'")
             
             # Percorre todas as colunas da linha
             for j, cell_value in enumerate(row):
@@ -760,12 +956,14 @@ def limpar_dados_completo_brasileiro_expandido(data):
                         print(f"Linha {i+3}, Coluna {coluna_letra}: '{valor_original}' -> '{valor_processado}'")
             
             # Preenche CEP na coluna AV se temos uma cidade identificada
-            if cidade_linha and len(row) > indice_av:
+            if cidade_linha:
                 cep = mapeamento_ceps.get(cidade_linha, '')
                 if cep:
-                    data[i][indice_av] = cep
-                    linha_alterada = True
-                    print(f"Linha {i+3}, Coluna AV: CEP '{cep}' adicionado para '{cidade_linha}'")
+                    # Expande a linha se necessário para incluir a coluna AV
+                    while len(data[i]) <= indice_av:
+                        data[i].append(None)
+                    
+                    data[i][indice_av] = cep  # ✅ Agora funciona sempre
             
             if linha_alterada:
                 linhas_alteradas += 1
@@ -864,105 +1062,6 @@ def paste_to_google_sheets_com_formatacao_completa(google_sheets_url, data, cred
         
         print("🎨 Aplicando formatações completas...")
         # Aplica todas as formatações após inserir os dados
-        aplicar_formatacao_completa_google_sheets(worksheet, cleaned_data, next_row)
-        
-        print(f"✅ Dados inseridos e formatados com sucesso!")
-        print(f"📊 Range utilizado: {range_name}")
-        print(f"📝 Número de linhas inseridas: {num_rows}")
-        print(f"📋 Número de colunas: {num_cols}")
-        print(f"🔗 Planilha acessível em: {google_sheets_url}")
-        
-    except Exception as e:
-        print(f"❌ Erro ao acessar ou modificar a planilha: {str(e)}")
-        raise
-
-def paste_to_google_sheets_com_formatacao_old(google_sheets_url, data, credentials_file):
-    """
-    Versão melhorada que cola dados E aplica formatação de moeda
-    """
-    try:
-        from google.oauth2.service_account import Credentials
-        
-        print("Configurando acesso ao Google Sheets...")
-        
-        # Configura as credenciais
-        scopes = [
-            'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive'
-        ]
-        
-        credentials = Credentials.from_service_account_file(credentials_file, scopes=scopes)
-        client = gspread.authorize(credentials)
-        
-        # Extrai o ID da planilha
-        if '/d/' in google_sheets_url:
-            spreadsheet_id = google_sheets_url.split('/d/')[1].split('/')[0]
-            print(f"ID da planilha extraído: {spreadsheet_id}")
-        else:
-            raise ValueError("URL do Google Sheets inválida")
-        
-        # Abre a planilha
-        print("Abrindo planilha do Google Sheets...")
-        spreadsheet = client.open_by_key(spreadsheet_id)
-        worksheet = spreadsheet.get_worksheet(0)
-        
-        print(f"Planilha acessada: {spreadsheet.title}")
-        print(f"Aba selecionada: {worksheet.title}")
-        
-        # Encontra a primeira linha vazia
-        print("Procurando primeira linha vazia...")
-        all_values = worksheet.get_all_values()
-        
-        next_row = 1
-        if all_values:
-            for i, row in enumerate(all_values):
-                if not any(cell.strip() for cell in row if cell):
-                    next_row = i + 1
-                    break
-            else:
-                next_row = len(all_values) + 1
-        
-        print(f"Inserindo dados a partir da linha {next_row}")
-        
-        # Prepara os dados
-        if not data or not data[0]:
-            raise ValueError("Nenhum dado para inserir")
-            
-        num_rows = len(data)
-        num_cols = len(data[0])
-        
-        def num_to_col_letters(num):
-            letters = ''
-            while num:
-                mod = (num - 1) % 26
-                letters = chr(mod + 65) + letters
-                num = (num - 1) // 26
-            return letters
-        
-        start_col = 'A'
-        end_col = num_to_col_letters(num_cols)
-        end_row = next_row + num_rows - 1
-        
-        range_name = f'{start_col}{next_row}:{end_col}{end_row}'
-        print(f"Range de inserção: {range_name}")
-        
-        # Limpa dados None
-        cleaned_data = []
-        for row in data:
-            cleaned_row = []
-            for cell in row:
-                if cell is None:
-                    cleaned_row.append('')
-                else:
-                    cleaned_row.append(cell)  # Mantém o tipo original (float para moeda)
-            cleaned_data.append(cleaned_row)
-        
-        # Insere os dados na planilha
-        print("Inserindo dados na planilha...")
-        worksheet.update(range_name, cleaned_data, value_input_option='USER_ENTERED')
-        
-        print("💰 Aplicando formatação de moeda...")
-        # Aplica formatação de moeda após inserir os dados
         aplicar_formatacao_completa_google_sheets(worksheet, cleaned_data, next_row)
         
         print(f"✅ Dados inseridos e formatados com sucesso!")
